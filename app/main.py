@@ -1,10 +1,16 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
+from app.database import Base , engine
+from app import models
 
 app = FastAPI()
 
 posts = []
+
+
+
+Base.metadata.create_all(bind=engine)
 
 class Post(BaseModel):
     title : str
@@ -25,8 +31,8 @@ def get_post(post_id: int):
     }
 
 @app.post("/posts")
-def get_posts(post : Post):
-    posts.append(post : Post)
+def post_posts(post : Post):
+    posts.append(post)
     return post
 
 @app.put("/posts/{post_id}")

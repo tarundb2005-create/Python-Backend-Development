@@ -1,48 +1,69 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
-from app.database import Base , engine
-from app import models
+from sqlalchemy.orm import Session
+
+from app.database import Base, engine, get_db
+from app.models import User
+
 
 app = FastAPI()
 
 posts = []
 
-
-
 Base.metadata.create_all(bind=engine)
 
+
 class Post(BaseModel):
-    title : str
-    content : str
+    title: str
+    content: str
 
-@app.get("/")
-def root():
-    return {"message" : "Here are the Posts"}
 
-@app.get("/posts")
-def get_posts(limit : int = 10 , skip : int = 0):
-    return posts[skip:skip + limit]
+class UserCreate(BaseModel):
+    name: str
+    email: str
 
-@app.get("/posts/{post_id}")
-def get_post(post_id: int):
-    return {
-            "post_id" : post_id
-    }
 
-@app.post("/posts")
-def post_posts(post : Post):
-    posts.append(post)
-    return post
-
-@app.put("/posts/{post_id}")
-def update_posts(post_id : int , post : Post):
-    for p in posts:
-        if p["id"] == post_id:
-            p["itle"] = post.title,
-            p["content"] = post.content
-            return p
-    raise HTTPException(
-        status_code = 404,
-        detail= "Post not found"
+@app.post("/users")
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    new_user = User(
+        name=user.name,
+        email=user.email
     )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
+
+@app.get("/users")
+def get_users(db : Session = Depends(get_db)):
+    users = db.query(User).all()
+    return users
+
+@app.get("/users/{user_id}")
+def get_user(user_id : int , db : Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if user is None:
+        raise HTTPException(status_code = 404 ,detail = "User Not Found")
+    return user
+
+@app.put("/users/{user_id}")
+def update_user(
+    user_id: int,
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.name = user_data.name
+    user.email = user_data.email
+
+    db.commit()
+    db.refresh(user)
+
+    return user

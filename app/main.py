@@ -1,9 +1,14 @@
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from app.security import hash_password, verify_password
+from app.security import (
+    hash_password,
+    verify_password,
+    create_access_token)
 from app.database import Base, engine, get_db
 from app.models import User
+from fastapi import Header
+from app.security import decode_access_token
 
 
 app = FastAPI()
@@ -125,6 +130,7 @@ def register_user(
 
 @app.post("/login")
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
+
     user = db.query(User).filter(
         User.email == user_data.email
     ).first()
@@ -144,8 +150,10 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
             detail="Invalid email or password"
         )
 
+    access_token = create_access_token(user.id)
+
     return {
         "message": "Login successful",
-        "user_id": user.id,
-        "name": user.name
+        "access_token": access_token,
+        "token_type": "bearer"
     }

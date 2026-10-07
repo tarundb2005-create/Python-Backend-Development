@@ -36,6 +36,75 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
+from fastapi import FastAPI, Depends, HTTPException, Header
+
+from app.security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    decode_access_token
+)
+
+app = FastAPI()
+
+
+def get_current_user(authorization: str = Header(...)):
+    try:
+        scheme, token = authorization.split()
+
+        if scheme.lower() != "bearer":
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication scheme"
+            )
+
+        payload = decode_access_token(token)
+
+        user_id = payload.get("sub")
+
+        if user_id is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )
+
+        return int(user_id)
+
+    except ValueError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header"
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+
+# Your endpoints come AFTER this
+@app.get("/users/{user_id}")
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user)
+):
+    if user_id != current_user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not allowed to access this user"
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return user
 
 @app.post("/users")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
@@ -55,13 +124,6 @@ def get_users(db : Session = Depends(get_db)):
     users = db.query(User).all()
     return users
 
-@app.get("/users/{user_id}")
-def get_user(user_id : int , db : Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if user is None:
-        raise HTTPException(status_code = 404 ,detail = "User Not Found")
-    return user
 
 @app.put("/users/{user_id}")
 def update_user(
@@ -80,7 +142,7 @@ def update_user(
     db.commit()
     db.refresh(user)
 
-    return user
+    return use
 @app.delete("/users/{user_id}")
 def delete_user(
     user_id = int ,
